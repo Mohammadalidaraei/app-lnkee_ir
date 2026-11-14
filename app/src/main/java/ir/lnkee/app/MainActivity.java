@@ -2,6 +2,11 @@ package ir.lnkee.app;
 
 import android.annotation.SuppressLint;
 import android.app.Activity;
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
+import android.content.pm.PackageManager;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.content.Context;
@@ -16,6 +21,7 @@ import android.view.View;
 import android.view.WindowInsets;
 import android.webkit.CookieManager;
 import android.webkit.WebChromeClient;
+import android.webkit.JavascriptInterface;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -25,6 +31,8 @@ import android.widget.Toast;
 
 public class MainActivity extends Activity {
     private static final String HOME_URL = "https://lnkee.ir/";
+    private static final String NOTIFICATION_CHANNEL_ID = "lnkee_updates";
+    private static final int NOTIFICATION_PERMISSION_REQUEST = 1001;
     private WebView webView;
     private ProgressBar loading;
     private View statusScreen;
@@ -77,6 +85,7 @@ public class MainActivity extends Activity {
         webView.getSettings().setMediaPlaybackRequiresUserGesture(true);
         webView.getSettings().setAllowFileAccess(false);
         webView.getSettings().setAllowContentAccess(false);
+        webView.addJavascriptInterface(new NotificationBridge(), "LnkeeAndroid");
 
         CookieManager.getInstance().setAcceptCookie(true);
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
@@ -89,6 +98,7 @@ public class MainActivity extends Activity {
             }
         });
         webView.setWebViewClient(new AppWebViewClient());
+        setUpNotifications();
 
         if (savedInstanceState == null) {
             loadHome();
@@ -158,6 +168,63 @@ public class MainActivity extends Activity {
         statusScreen.setVisibility(View.GONE);
     }
 
+    private void setUpNotifications() {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            NotificationChannel channel = new NotificationChannel(
+                    NOTIFICATION_CHANNEL_ID,
+                    getString(R.string.notification_channel_name),
+                    NotificationManager.IMPORTANCE_DEFAULT);
+            channel.setDescription(getString(R.string.notification_channel_description));
+            getSystemService(NotificationManager.class).createNotificationChannel(channel);
+        }
+        if (android.os.Build.VERSION.SDK_INT >= 33
+                && checkSelfPermission("android.permission.POST_NOTIFICATIONS")
+                != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{"android.permission.POST_NOTIFICATIONS"},
+                    NOTIFICATION_PERMISSION_REQUEST);
+        }
+    }
+
+    private boolean isLnkeeUrl(String url) {
+        if (url == null) return false;
+        Uri uri = Uri.parse(url);
+        String host = uri.getHost();
+        return host != null && (host.equals("lnkee.ir") || host.endsWith(".lnkee.ir"));
+    }
+
+    private void showNativeNotification(String title, String message) {
+        if (android.os.Build.VERSION.SDK_INT >= 33
+                && checkSelfPermission("android.permission.POST_NOTIFICATIONS")
+                != PackageManager.PERMISSION_GRANTED) {
+            return;
+        }
+        Intent openApp = new Intent(this, MainActivity.class);
+        openApp.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        PendingIntent contentIntent = PendingIntent.getActivity(
+                this, 0, openApp, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        Notification.Builder builder = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O
+                ? new Notification.Builder(this, NOTIFICATION_CHANNEL_ID)
+                : new Notification.Builder(this);
+        builder.setSmallIcon(R.drawable.ic_notification)
+                .setContentTitle(title == null || title.trim().isEmpty() ? getString(R.string.app_name) : title)
+                .setContentText(message == null ? "" : message)
+                .setAutoCancel(true)
+                .setContentIntent(contentIntent);
+        getSystemService(NotificationManager.class)
+                .notify((int) (System.currentTimeMillis() & 0x0fffffff), builder.build());
+    }
+
+    private final class NotificationBridge {
+        @JavascriptInterface
+        public void showNotification(String title, String message) {
+            webView.post(() -> {
+                if (isLnkeeUrl(webView.getUrl())) {
+                    showNativeNotification(title, message);
+                }
+            });
+        }
+    }
+
     private final class AppWebViewClient extends WebViewClient {
         @Override
         public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
@@ -179,6 +246,7 @@ public class MainActivity extends Activity {
             super.onPageFinished(view, url);
             if (url.startsWith("http")) {
                 showWebContent();
+                installNotificationBridge(view, url);
             }
         }
 
@@ -204,7 +272,8 @@ public class MainActivity extends Activity {
 
         private boolean openUrl(Uri uri) {
             String scheme = uri.getScheme();
-            if ("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme)) {
+            if (("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme))
+                    && isLnkeeUrl(uri.toString())) {
                 return false;
             }
             try {
@@ -214,6 +283,21 @@ public class MainActivity extends Activity {
             }
             return true;
         }
+
+        private void installNotificationBridge(WebView view, String url) {
+            if (!isLnkeeUrl(url)) return;
+            String script = "(function(){"
+                    + "if(window.__lnkeeNativeNotifications)return;"
+                    + "window.__lnkeeNativeNotifications=true;"
+                    + "function LnkeeNotification(title,options){"
+                    + "var body=options&&options.body?String(options.body):'';"
+                    + "window.LnkeeAndroid.showNotification(String(title),body);"
+                    + "return {close:function(){}};}"
+                    + "LnkeeNotification.permission='granted';"
+                    + "LnkeeNotification.requestPermission=function(){return Promise.resolve('granted');};"
+                    + "window.Notification=LnkeeNotification;"
+                    + "})();";
+            view.evaluateJavascript(script, null);
+        }
     }
 }
-
