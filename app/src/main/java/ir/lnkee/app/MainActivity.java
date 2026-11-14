@@ -13,6 +13,7 @@ import android.net.NetworkCapabilities;
 import android.net.NetworkInfo;
 import android.os.Bundle;
 import android.view.View;
+import android.view.WindowInsets;
 import android.webkit.CookieManager;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
@@ -50,6 +51,17 @@ public class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        View rootLayout = findViewById(R.id.root_layout);
+        rootLayout.setOnApplyWindowInsetsListener((view, insets) -> {
+            // Android 15+ places content behind system bars by default. Keep the
+            // website entirely inside the safe area on every Android version.
+            view.setPadding(
+                    insets.getSystemWindowInsetLeft(),
+                    insets.getSystemWindowInsetTop(),
+                    insets.getSystemWindowInsetRight(),
+                    insets.getSystemWindowInsetBottom());
+            return insets;
+        });
         loading = findViewById(R.id.loading);
         webView = findViewById(R.id.web_view);
         statusScreen = findViewById(R.id.status_screen);
@@ -204,3 +216,4 @@ public class MainActivity extends Activity {
         }
     }
 }
+
