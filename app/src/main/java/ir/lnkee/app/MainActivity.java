@@ -56,6 +56,7 @@ public class MainActivity extends Activity {
     @SuppressLint("SetJavaScriptEnabled")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        setTheme(R.style.Theme_Lnkee);
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
@@ -85,6 +86,18 @@ public class MainActivity extends Activity {
         webView.getSettings().setMediaPlaybackRequiresUserGesture(true);
         webView.getSettings().setAllowFileAccess(false);
         webView.getSettings().setAllowContentAccess(false);
+        webView.getSettings().setSupportMultipleWindows(false);
+        webView.getSettings().setJavaScriptCanOpenWindowsAutomatically(false);
+        webView.getSettings().setBuiltInZoomControls(false);
+        webView.getSettings().setDisplayZoomControls(false);
+        String userAgent = webView.getSettings().getUserAgentString();
+        if (!userAgent.contains("LnkeeApp")) {
+            webView.getSettings().setUserAgentString(userAgent + " LnkeeApp/1.0");
+        }
+        webView.setOverScrollMode(View.OVER_SCROLL_NEVER);
+        webView.setVerticalScrollBarEnabled(false);
+        webView.setHorizontalScrollBarEnabled(false);
+        webView.setBackgroundColor(android.graphics.Color.WHITE);
         webView.addJavascriptInterface(new NotificationBridge(), "LnkeeAndroid");
 
         CookieManager.getInstance().setAcceptCookie(true);
@@ -247,6 +260,7 @@ public class MainActivity extends Activity {
             if (url.startsWith("http")) {
                 showWebContent();
                 installNotificationBridge(view, url);
+                applyAppLikeWebBehavior(view, url);
             }
         }
 
@@ -296,6 +310,15 @@ public class MainActivity extends Activity {
                     + "LnkeeNotification.permission='granted';"
                     + "LnkeeNotification.requestPermission=function(){return Promise.resolve('granted');};"
                     + "window.Notification=LnkeeNotification;"
+                    + "})();";
+            view.evaluateJavascript(script, null);
+        }
+
+        private void applyAppLikeWebBehavior(WebView view, String url) {
+            if (!isLnkeeUrl(url)) return;
+            String script = "(function(){"
+                    + "document.querySelectorAll('a[target=\\\"_blank\\\"]').forEach(function(a){a.target='_self';});"
+                    + "document.documentElement.style.webkitTapHighlightColor='transparent';"
                     + "})();";
             view.evaluateJavascript(script, null);
         }
