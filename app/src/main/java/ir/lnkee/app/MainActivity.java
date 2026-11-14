@@ -22,6 +22,7 @@ import android.view.WindowInsets;
 import android.webkit.CookieManager;
 import android.webkit.WebChromeClient;
 import android.webkit.JavascriptInterface;
+import android.webkit.ValueCallback;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -33,6 +34,7 @@ public class MainActivity extends Activity {
     private static final String HOME_URL = "https://lnkee.ir/";
     private static final String NOTIFICATION_CHANNEL_ID = "lnkee_updates";
     private static final int NOTIFICATION_PERMISSION_REQUEST = 1001;
+    private static final int FILE_CHOOSER_REQUEST = 1002;
     private WebView webView;
     private ProgressBar loading;
     private View statusScreen;
@@ -40,6 +42,7 @@ public class MainActivity extends Activity {
     private TextView statusMessage;
     private TextView retryButton;
     private ConnectivityManager connectivityManager;
+    private ValueCallback<Uri[]> fileChooserCallback;
     private boolean pageLoaded;
 
     private final ConnectivityManager.NetworkCallback networkCallback = new ConnectivityManager.NetworkCallback() {
@@ -109,6 +112,29 @@ public class MainActivity extends Activity {
                 loading.setProgress(progress);
                 loading.setVisibility(progress < 100 ? View.VISIBLE : View.GONE);
             }
+
+            @Override
+            public boolean onShowFileChooser(WebView webView,
+                                             ValueCallback<Uri[]> filePathCallback,
+                                             FileChooserParams fileChooserParams) {
+                if (fileChooserCallback != null) {
+                    fileChooserCallback.onReceiveValue(null);
+                }
+                fileChooserCallback = filePathCallback;
+                Intent picker = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+                picker.addCategory(Intent.CATEGORY_OPENABLE);
+                picker.setType("*/*");
+                picker.putExtra(Intent.EXTRA_ALLOW_MULTIPLE,
+                        fileChooserParams.getMode() == FileChooserParams.MODE_OPEN_MULTIPLE);
+                try {
+                    startActivityForResult(Intent.createChooser(picker,
+                            getString(R.string.file_picker_title)), FILE_CHOOSER_REQUEST);
+                } catch (ActivityNotFoundException exception) {
+                    fileChooserCallback = null;
+                    Toast.makeText(MainActivity.this, R.string.no_file_picker, Toast.LENGTH_SHORT).show();
+                }
+                return true;
+            }
         });
         webView.setWebViewClient(new AppWebViewClient());
         setUpNotifications();
@@ -125,6 +151,26 @@ public class MainActivity extends Activity {
     protected void onSaveInstanceState(Bundle outState) {
         webView.saveState(outState);
         super.onSaveInstanceState(outState);
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode != FILE_CHOOSER_REQUEST || fileChooserCallback == null) return;
+        Uri[] results = null;
+        if (resultCode == RESULT_OK && data != null) {
+            if (data.getClipData() != null) {
+                int count = data.getClipData().getItemCount();
+                results = new Uri[count];
+                for (int i = 0; i < count; i++) {
+                    results[i] = data.getClipData().getItemAt(i).getUri();
+                }
+            } else if (data.getData() != null) {
+                results = new Uri[]{data.getData()};
+            }
+        }
+        fileChooserCallback.onReceiveValue(results);
+        fileChooserCallback = null;
     }
 
     @Override

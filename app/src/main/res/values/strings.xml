@@ -10,4 +10,6 @@
     <string name="retry">تلاش مجدد</string>
     <string name="notification_channel_name">اعلان‌های لینکه</string>
     <string name="notification_channel_description">پیام‌ها و به‌روزرسانی‌های لینکه</string>
+    <string name="file_picker_title">انتخاب فایل برای آپلود</string>
+    <string name="no_file_picker">برنامه‌ای برای انتخاب فایل پیدا نشد.</string>
 </resources>
