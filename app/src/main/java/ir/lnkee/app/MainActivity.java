@@ -23,6 +23,7 @@ import android.webkit.CookieManager;
 import android.webkit.WebChromeClient;
 import android.webkit.JavascriptInterface;
 import android.webkit.ValueCallback;
+import android.webkit.WebSettings;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -44,6 +45,7 @@ public class MainActivity extends Activity {
     private ConnectivityManager connectivityManager;
     private ValueCallback<Uri[]> fileChooserCallback;
     private boolean pageLoaded;
+    private boolean loadingCachedPage;
 
     private final ConnectivityManager.NetworkCallback networkCallback = new ConnectivityManager.NetworkCallback() {
         @Override
@@ -82,20 +84,23 @@ public class MainActivity extends Activity {
         retryButton = findViewById(R.id.retry_button);
         connectivityManager = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
         retryButton.setOnClickListener(view -> loadHome());
-        webView.getSettings().setJavaScriptEnabled(true);
-        webView.getSettings().setDomStorageEnabled(true);
-        webView.getSettings().setLoadWithOverviewMode(true);
-        webView.getSettings().setUseWideViewPort(true);
-        webView.getSettings().setMediaPlaybackRequiresUserGesture(true);
-        webView.getSettings().setAllowFileAccess(false);
-        webView.getSettings().setAllowContentAccess(false);
-        webView.getSettings().setSupportMultipleWindows(false);
-        webView.getSettings().setJavaScriptCanOpenWindowsAutomatically(false);
-        webView.getSettings().setBuiltInZoomControls(false);
-        webView.getSettings().setDisplayZoomControls(false);
-        String userAgent = webView.getSettings().getUserAgentString();
+        WebSettings settings = webView.getSettings();
+        settings.setJavaScriptEnabled(true);
+        settings.setDomStorageEnabled(true);
+        settings.setDatabaseEnabled(true);
+        settings.setCacheMode(WebSettings.LOAD_DEFAULT);
+        settings.setLoadWithOverviewMode(true);
+        settings.setUseWideViewPort(true);
+        settings.setMediaPlaybackRequiresUserGesture(true);
+        settings.setAllowFileAccess(false);
+        settings.setAllowContentAccess(false);
+        settings.setSupportMultipleWindows(false);
+        settings.setJavaScriptCanOpenWindowsAutomatically(false);
+        settings.setBuiltInZoomControls(false);
+        settings.setDisplayZoomControls(false);
+        String userAgent = settings.getUserAgentString();
         if (!userAgent.contains("LnkeeApp")) {
-            webView.getSettings().setUserAgentString(userAgent + " LnkeeApp/1.0");
+            settings.setUserAgentString(userAgent + " LnkeeApp/1.0");
         }
         webView.setOverScrollMode(View.OVER_SCROLL_NEVER);
         webView.setVerticalScrollBarEnabled(false);
@@ -196,9 +201,14 @@ public class MainActivity extends Activity {
     private void loadHome() {
         pageLoaded = false;
         if (!hasInternet()) {
-            showStatus(R.string.offline_title, R.string.offline_message, true);
+            loadingCachedPage = true;
+            webView.getSettings().setCacheMode(WebSettings.LOAD_CACHE_ELSE_NETWORK);
+            showStatus(R.string.cached_loading_title, R.string.cached_loading_message, false);
+            webView.loadUrl(HOME_URL);
             return;
         }
+        loadingCachedPage = false;
+        webView.getSettings().setCacheMode(WebSettings.LOAD_DEFAULT);
         showStatus(R.string.connecting_title, R.string.connecting_message, false);
         webView.loadUrl(HOME_URL);
     }
@@ -224,6 +234,7 @@ public class MainActivity extends Activity {
 
     private void showWebContent() {
         pageLoaded = true;
+        loadingCachedPage = false;
         statusScreen.setVisibility(View.GONE);
     }
 
@@ -287,11 +298,13 @@ public class MainActivity extends Activity {
     private final class AppWebViewClient extends WebViewClient {
         @Override
         public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+            prepareCacheForNavigation(request.getUrl());
             return openUrl(request.getUrl());
         }
 
         @Override
         public boolean shouldOverrideUrlLoading(WebView view, String url) {
+            prepareCacheForNavigation(Uri.parse(url));
             return openUrl(Uri.parse(url));
         }
 
@@ -316,7 +329,11 @@ public class MainActivity extends Activity {
             if (request.isForMainFrame()) {
                 view.stopLoading();
                 view.loadUrl("about:blank");
-                showStatus(R.string.server_error_title, R.string.server_error_message, true);
+                if (loadingCachedPage) {
+                    showStatus(R.string.offline_title, R.string.offline_message, true);
+                } else {
+                    showStatus(R.string.server_error_title, R.string.server_error_message, true);
+                }
             }
         }
 
@@ -367,6 +384,14 @@ public class MainActivity extends Activity {
                     + "document.documentElement.style.webkitTapHighlightColor='transparent';"
                     + "})();";
             view.evaluateJavascript(script, null);
+        }
+
+        private void prepareCacheForNavigation(Uri uri) {
+            if (!isLnkeeUrl(uri.toString())) return;
+            loadingCachedPage = !hasInternet();
+            webView.getSettings().setCacheMode(loadingCachedPage
+                    ? WebSettings.LOAD_CACHE_ELSE_NETWORK
+                    : WebSettings.LOAD_DEFAULT);
         }
     }
 }

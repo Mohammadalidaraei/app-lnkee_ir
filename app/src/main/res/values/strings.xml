@@ -5,6 +5,8 @@
     <string name="connecting_message">لطفاً چند لحظه صبر کنید…</string>
     <string name="offline_title">اتصال اینترنت برقرار نیست</string>
     <string name="offline_message">برای ادامه، اینترنت خود را بررسی کنید و دوباره تلاش کنید.</string>
+    <string name="cached_loading_title">در حال باز کردن آخرین نسخه</string>
+    <string name="cached_loading_message">نسخهٔ ذخیره‌شدهٔ لینکه در حال آماده‌شدن است…</string>
     <string name="server_error_title">اتصال به سرور انجام نشد</string>
     <string name="server_error_message">در حال حاضر امکان دریافت اطلاعات سایت وجود ندارد. کمی بعد دوباره تلاش کنید.</string>
     <string name="retry">تلاش مجدد</string>
